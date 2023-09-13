@@ -1,75 +1,86 @@
+'use strict';
+Object.defineProperty(exports, '__esModule', { value: true });
+exports.Variant =
+  exports.Record =
+  exports.Opt =
+  exports.Vec =
+  exports.Tuple =
+  exports.Principal =
+  exports.Nat64 =
+  exports.Nat32 =
+  exports.Nat16 =
+  exports.Nat8 =
+  exports.Int64 =
+  exports.Int32 =
+  exports.Int16 =
+  exports.Int8 =
+  exports.Float64 =
+  exports.Float32 =
+  exports.Nat =
+  exports.Int =
+  exports.Text =
+  exports.Null =
+  exports.Bool =
+  exports.Unknown =
+  exports.Reserved =
+  exports.Empty =
+  exports.decode =
+  exports.encode =
+  exports.ServiceClass =
+  exports.FuncClass =
+  exports.PrincipalClass =
+  exports.RecClass =
+  exports.VariantClass =
+  exports.TupleClass =
+  exports.RecordClass =
+  exports.OptClass =
+  exports.VecClass =
+  exports.FixedNatClass =
+  exports.FixedIntClass =
+  exports.FloatClass =
+  exports.NatClass =
+  exports.IntClass =
+  exports.TextClass =
+  exports.ReservedClass =
+  exports.NullClass =
+  exports.BoolClass =
+  exports.UnknownClass =
+  exports.EmptyClass =
+  exports.ConstructType =
+  exports.PrimitiveType =
+  exports.Type =
+  exports.Visitor =
+    void 0;
+exports.Service = exports.Func = exports.Rec = void 0;
 // tslint:disable:max-classes-per-file
-import { Principal as PrincipalId } from '@dfinity/principal';
-import { JsonValue } from './types';
-import { concat, PipeArrayBuffer as Pipe } from './utils/buffer';
-import { idlLabelToId } from './utils/hash';
-import {
-  lebDecode,
-  lebEncode,
-  readIntLE,
-  readUIntLE,
-  safeRead,
-  safeReadUint8,
-  slebDecode,
-  slebEncode,
-  writeIntLE,
-  writeUIntLE,
-} from './utils/leb128';
-import { iexp2 } from './utils/bigint-math';
-
-// tslint:disable:max-line-length
-/**
- * This module provides a combinator library to create serializers/deserializers
- * between JavaScript values and IDL used by canisters on the Internet Computer,
- * as documented at https://github.com/dfinity/candid/blob/119703ba342d2fef6ab4972d2541b9fe36ae8e36/spec/Candid.md
- */
-// tslint:enable:max-line-length
-
-const enum IDLTypeIds {
-  Null = -1,
-  Bool = -2,
-  Nat = -3,
-  Int = -4,
-  Float32 = -13,
-  Float64 = -14,
-  Text = -15,
-  Reserved = -16,
-  Empty = -17,
-  Opt = -18,
-  Vector = -19,
-  Record = -20,
-  Variant = -21,
-  Func = -22,
-  Service = -23,
-  Principal = -24,
-}
-
+const principal_1 = require('@dfinity/principal');
+const buffer_1 = require('./utils/buffer');
+const hash_1 = require('./utils/hash');
+const leb128_1 = require('./utils/leb128');
+const bigint_math_1 = require('./utils/bigint-math');
 const magicNumber = 'DIDL';
 const toReadableString_max = 400; // will not display arguments after 400chars. Makes sure 2mb blobs don't get inside the error
-
-function zipWith<TX, TY, TR>(xs: TX[], ys: TY[], f: (a: TX, b: TY) => TR): TR[] {
+function zipWith(xs, ys, f) {
   return xs.map((x, i) => f(x, ys[i]));
 }
-
 /**
  * An IDL Type Table, which precedes the data in the stream.
  */
 class TypeTable {
-  // List of types. Needs to be an array as the index needs to be stable.
-  private _typs: ArrayBuffer[] = [];
-  private _idx = new Map<string, number>();
-
-  public has(obj: ConstructType) {
+  constructor() {
+    // List of types. Needs to be an array as the index needs to be stable.
+    this._typs = [];
+    this._idx = new Map();
+  }
+  has(obj) {
     return this._idx.has(obj.name);
   }
-
-  public add<T>(type: ConstructType<T>, buf: ArrayBuffer) {
+  add(type, buf) {
     const idx = this._typs.length;
     this._idx.set(type.name, idx);
     this._typs.push(buf);
   }
-
-  public merge<T>(obj: ConstructType<T>, knot: string) {
+  merge(obj, knot) {
     const idx = this._idx.get(obj.name);
     const knotIdx = this._idx.get(knot);
     if (idx === undefined) {
@@ -79,163 +90,129 @@ class TypeTable {
       throw new Error('Missing type index for ' + knot);
     }
     this._typs[idx] = this._typs[knotIdx];
-
     // Delete the type.
     this._typs.splice(knotIdx, 1);
     this._idx.delete(knot);
   }
-
-  public encode() {
-    const len = lebEncode(this._typs.length);
-    const buf = concat(...this._typs);
-    return concat(len, buf);
+  encode() {
+    const len = (0, leb128_1.lebEncode)(this._typs.length);
+    const buf = (0, buffer_1.concat)(...this._typs);
+    return (0, buffer_1.concat)(len, buf);
   }
-
-  public indexOf(typeName: string) {
+  indexOf(typeName) {
     if (!this._idx.has(typeName)) {
       throw new Error('Missing type index for ' + typeName);
     }
-    return slebEncode(this._idx.get(typeName) || 0);
+    return (0, leb128_1.slebEncode)(this._idx.get(typeName) || 0);
   }
 }
-
-export abstract class Visitor<D, R> {
-  public visitType<T>(t: Type<T>, data: D): R {
+class Visitor {
+  visitType(t, data) {
     throw new Error('Not implemented');
   }
-  public visitPrimitive<T>(t: PrimitiveType<T>, data: D): R {
+  visitPrimitive(t, data) {
     return this.visitType(t, data);
   }
-  public visitEmpty(t: EmptyClass, data: D): R {
+  visitEmpty(t, data) {
     return this.visitPrimitive(t, data);
   }
-  public visitBool(t: BoolClass, data: D): R {
+  visitBool(t, data) {
     return this.visitPrimitive(t, data);
   }
-  public visitNull(t: NullClass, data: D): R {
+  visitNull(t, data) {
     return this.visitPrimitive(t, data);
   }
-  public visitReserved(t: ReservedClass, data: D): R {
+  visitReserved(t, data) {
     return this.visitPrimitive(t, data);
   }
-  public visitText(t: TextClass, data: D): R {
+  visitText(t, data) {
     return this.visitPrimitive(t, data);
   }
-  public visitNumber<T>(t: PrimitiveType<T>, data: D): R {
+  visitNumber(t, data) {
     return this.visitPrimitive(t, data);
   }
-  public visitInt(t: IntClass, data: D): R {
+  visitInt(t, data) {
     return this.visitNumber(t, data);
   }
-  public visitNat(t: NatClass, data: D): R {
+  visitNat(t, data) {
     return this.visitNumber(t, data);
   }
-  public visitFloat(t: FloatClass, data: D): R {
+  visitFloat(t, data) {
     return this.visitPrimitive(t, data);
   }
-  public visitFixedInt(t: FixedIntClass, data: D): R {
+  visitFixedInt(t, data) {
     return this.visitNumber(t, data);
   }
-  public visitFixedNat(t: FixedNatClass, data: D): R {
+  visitFixedNat(t, data) {
     return this.visitNumber(t, data);
   }
-  public visitPrincipal(t: PrincipalClass, data: D): R {
+  visitPrincipal(t, data) {
     return this.visitPrimitive(t, data);
   }
-
-  public visitConstruct<T>(t: ConstructType<T>, data: D): R {
+  visitConstruct(t, data) {
     return this.visitType(t, data);
   }
-  public visitVec<T>(t: VecClass<T>, ty: Type<T>, data: D): R {
+  visitVec(t, ty, data) {
     return this.visitConstruct(t, data);
   }
-  public visitOpt<T>(t: OptClass<T>, ty: Type<T>, data: D): R {
+  visitOpt(t, ty, data) {
     return this.visitConstruct(t, data);
   }
-  public visitRecord(t: RecordClass, fields: Array<[string, Type]>, data: D): R {
+  visitRecord(t, fields, data) {
     return this.visitConstruct(t, data);
   }
-  public visitTuple<T extends any[]>(t: TupleClass<T>, components: Type[], data: D): R {
-    const fields: Array<[string, Type]> = components.map((ty, i) => [`_${i}_`, ty]);
+  visitTuple(t, components, data) {
+    const fields = components.map((ty, i) => [`_${i}_`, ty]);
     return this.visitRecord(t, fields, data);
   }
-  public visitVariant(t: VariantClass, fields: Array<[string, Type]>, data: D): R {
+  visitVariant(t, fields, data) {
     return this.visitConstruct(t, data);
   }
-  public visitRec<T>(t: RecClass<T>, ty: ConstructType<T>, data: D): R {
+  visitRec(t, ty, data) {
     return this.visitConstruct(ty, data);
   }
-  public visitFunc(t: FuncClass, data: D): R {
+  visitFunc(t, data) {
     return this.visitConstruct(t, data);
   }
-  public visitService(t: ServiceClass, data: D): R {
+  visitService(t, data) {
     return this.visitConstruct(t, data);
   }
 }
-
+exports.Visitor = Visitor;
 /**
  * Represents an IDL type.
  */
-export abstract class Type<T = any> {
-  public abstract readonly name: string;
-  public abstract accept<D, R>(v: Visitor<D, R>, d: D): R;
-
+class Type {
   /* Display type name */
-  public display(): string {
+  display() {
     return this.name;
   }
-
-  public valueToString(x: T): string {
+  valueToString(x) {
     return toReadableString(x);
   }
-
   /* Implement `T` in the IDL spec, only needed for non-primitive types */
-  public buildTypeTable(typeTable: TypeTable): void {
+  buildTypeTable(typeTable) {
     if (!typeTable.has(this)) {
       this._buildTypeTableImpl(typeTable);
     }
   }
-
-  /**
-   * Assert that JavaScript's `x` is the proper type represented by this
-   * Type.
-   */
-  public abstract covariant(x: any): x is T;
-
-  /**
-   * Encode the value. This needs to be public because it is used by
-   * encodeValue() from different types.
-   * @internal
-   */
-  public abstract encodeValue(x: T): ArrayBuffer;
-
-  /**
-   * Implement `I` in the IDL spec.
-   * Encode this type for the type table.
-   */
-  public abstract encodeType(typeTable: TypeTable): ArrayBuffer;
-
-  public abstract checkType(t: Type): Type;
-  public abstract decodeValue(x: Pipe, t: Type): T;
-
-  protected abstract _buildTypeTableImpl(typeTable: TypeTable): void;
 }
-
-export abstract class PrimitiveType<T = any> extends Type<T> {
-  public checkType(t: Type): Type {
+exports.Type = Type;
+class PrimitiveType extends Type {
+  checkType(t) {
     if (this.name !== t.name) {
       throw new Error(`type mismatch: type on the wire ${t.name}, expect type ${this.name}`);
     }
     return t;
   }
-  public _buildTypeTableImpl(typeTable: TypeTable): void {
+  _buildTypeTableImpl(typeTable) {
     // No type table encoding for Primitive types.
     return;
   }
 }
-
-export abstract class ConstructType<T = any> extends Type<T> {
-  public checkType(t: Type): ConstructType<T> {
+exports.PrimitiveType = PrimitiveType;
+class ConstructType extends Type {
+  checkType(t) {
     if (t instanceof RecClass) {
       const ty = t.getType();
       if (typeof ty === 'undefined') {
@@ -245,46 +222,40 @@ export abstract class ConstructType<T = any> extends Type<T> {
     }
     throw new Error(`type mismatch: type on the wire ${t.name}, expect type ${this.name}`);
   }
-  public encodeType(typeTable: TypeTable) {
+  encodeType(typeTable) {
     return typeTable.indexOf(this.name);
   }
 }
-
+exports.ConstructType = ConstructType;
 /**
  * Represents an IDL Empty, a type which has no inhabitants.
  * Since no values exist for this type, it cannot be serialised or deserialised.
  * Result types like `Result<Text, Empty>` should always succeed.
  */
-export class EmptyClass extends PrimitiveType<never> {
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+class EmptyClass extends PrimitiveType {
+  accept(v, d) {
     return v.visitEmpty(this, d);
   }
-
-  public covariant(x: any): x is never {
+  covariant(x) {
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(): never {
+  encodeValue() {
     throw new Error('Empty cannot appear as a function argument');
   }
-
-  public valueToString(): never {
+  valueToString() {
     throw new Error('Empty cannot appear as a value');
   }
-
-  public encodeType() {
-    return slebEncode(IDLTypeIds.Empty);
+  encodeType() {
+    return (0, leb128_1.slebEncode)(-17 /* IDLTypeIds.Empty */);
   }
-
-  public decodeValue(): never {
+  decodeValue() {
     throw new Error('Empty cannot appear as an output');
   }
-
   get name() {
     return 'empty';
   }
 }
-
+exports.EmptyClass = EmptyClass;
 /**
  * Represents an IDL Unknown, a placeholder type for deserialization only.
  * When decoding a value as Unknown, all fields will be retained but the names are only available in
@@ -292,41 +263,33 @@ export class EmptyClass extends PrimitiveType<never> {
  * A deserialized unknown will offer it's actual type by calling the `type()` function.
  * Unknown cannot be serialized and attempting to do so will throw an error.
  */
-export class UnknownClass extends Type {
-  public checkType(t: Type): Type {
+class UnknownClass extends Type {
+  checkType(t) {
     throw new Error('Method not implemented for unknown.');
   }
-
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     throw v.visitType(this, d);
   }
-
-  public covariant(x: any): x is any {
+  covariant(x) {
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(): never {
+  encodeValue() {
     throw new Error('Unknown cannot appear as a function argument');
   }
-
-  public valueToString(): never {
+  valueToString() {
     throw new Error('Unknown cannot appear as a value');
   }
-
-  public encodeType(): never {
+  encodeType() {
     throw new Error('Unknown cannot be serialized');
   }
-
-  public decodeValue(b: Pipe, t: Type): any {
+  decodeValue(b, t) {
     let decodedValue = t.decodeValue(b, t);
-
     if (Object(decodedValue) !== decodedValue) {
       // decodedValue is primitive. Box it, otherwise we cannot add the type() function.
       // The type() function is important for primitives because otherwise we cannot tell apart the
       // different number types.
       decodedValue = Object(decodedValue);
     }
-
     let typeFunc;
     if (t instanceof RecClass) {
       typeFunc = () => t.getType();
@@ -345,40 +308,34 @@ export class UnknownClass extends Type {
     });
     return decodedValue;
   }
-
-  protected _buildTypeTableImpl(): void {
+  _buildTypeTableImpl() {
     throw new Error('Unknown cannot be serialized');
   }
-
   get name() {
     return 'Unknown';
   }
 }
-
+exports.UnknownClass = UnknownClass;
 /**
  * Represents an IDL Bool
  */
-export class BoolClass extends PrimitiveType<boolean> {
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+class BoolClass extends PrimitiveType {
+  accept(v, d) {
     return v.visitBool(this, d);
   }
-
-  public covariant(x: any): x is boolean {
+  covariant(x) {
     if (typeof x === 'boolean') return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: boolean): ArrayBuffer {
+  encodeValue(x) {
     return new Uint8Array([x ? 1 : 0]);
   }
-
-  public encodeType() {
-    return slebEncode(IDLTypeIds.Bool);
+  encodeType() {
+    return (0, leb128_1.slebEncode)(-2 /* IDLTypeIds.Bool */);
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     this.checkType(t);
-    switch (safeReadUint8(b)) {
+    switch ((0, leb128_1.safeReadUint8)(b)) {
       case 0:
         return false;
       case 1:
@@ -387,209 +344,179 @@ export class BoolClass extends PrimitiveType<boolean> {
         throw new Error('Boolean value out of range');
     }
   }
-
   get name() {
     return 'bool';
   }
 }
-
+exports.BoolClass = BoolClass;
 /**
  * Represents an IDL Null
  */
-export class NullClass extends PrimitiveType<null> {
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+class NullClass extends PrimitiveType {
+  accept(v, d) {
     return v.visitNull(this, d);
   }
-
-  public covariant(x: any): x is null {
+  covariant(x) {
     if (x === null) return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue() {
+  encodeValue() {
     return new ArrayBuffer(0);
   }
-
-  public encodeType() {
-    return slebEncode(IDLTypeIds.Null);
+  encodeType() {
+    return (0, leb128_1.slebEncode)(-1 /* IDLTypeIds.Null */);
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     this.checkType(t);
     return null;
   }
-
   get name() {
     return 'null';
   }
 }
-
+exports.NullClass = NullClass;
 /**
  * Represents an IDL Reserved
  */
-export class ReservedClass extends PrimitiveType<any> {
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+class ReservedClass extends PrimitiveType {
+  accept(v, d) {
     return v.visitReserved(this, d);
   }
-
-  public covariant(x: any): x is any {
+  covariant(x) {
     return true;
   }
-
-  public encodeValue() {
+  encodeValue() {
     return new ArrayBuffer(0);
   }
-
-  public encodeType() {
-    return slebEncode(IDLTypeIds.Reserved);
+  encodeType() {
+    return (0, leb128_1.slebEncode)(-16 /* IDLTypeIds.Reserved */);
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     if (t.name !== this.name) {
       t.decodeValue(b, t);
     }
     return null;
   }
-
   get name() {
     return 'reserved';
   }
 }
-
+exports.ReservedClass = ReservedClass;
 /**
  * Represents an IDL Text
  */
-export class TextClass extends PrimitiveType<string> {
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+class TextClass extends PrimitiveType {
+  accept(v, d) {
     return v.visitText(this, d);
   }
-
-  public covariant(x: any): x is string {
+  covariant(x) {
     if (typeof x === 'string') return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: string) {
+  encodeValue(x) {
     const buf = new TextEncoder().encode(x);
-    const len = lebEncode(buf.byteLength);
-    return concat(len, buf);
+    const len = (0, leb128_1.lebEncode)(buf.byteLength);
+    return (0, buffer_1.concat)(len, buf);
   }
-
-  public encodeType() {
-    return slebEncode(IDLTypeIds.Text);
+  encodeType() {
+    return (0, leb128_1.slebEncode)(-15 /* IDLTypeIds.Text */);
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     this.checkType(t);
-    const len = lebDecode(b);
-    const buf = safeRead(b, Number(len));
+    const len = (0, leb128_1.lebDecode)(b);
+    const buf = (0, leb128_1.safeRead)(b, Number(len));
     const decoder = new TextDecoder('utf8', { fatal: true });
     return decoder.decode(buf);
   }
-
   get name() {
     return 'text';
   }
-
-  public valueToString(x: string) {
+  valueToString(x) {
     return '"' + x + '"';
   }
 }
-
+exports.TextClass = TextClass;
 /**
  * Represents an IDL Int
  */
-export class IntClass extends PrimitiveType<bigint> {
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+class IntClass extends PrimitiveType {
+  accept(v, d) {
     return v.visitInt(this, d);
   }
-
-  public covariant(x: any): x is bigint {
+  covariant(x) {
     // We allow encoding of JavaScript plain numbers.
     // But we will always decode to bigint.
     if (typeof x === 'bigint' || Number.isInteger(x)) return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: bigint | number) {
-    return slebEncode(x);
+  encodeValue(x) {
+    return (0, leb128_1.slebEncode)(x);
   }
-
-  public encodeType() {
-    return slebEncode(IDLTypeIds.Int);
+  encodeType() {
+    return (0, leb128_1.slebEncode)(-4 /* IDLTypeIds.Int */);
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     this.checkType(t);
-    return slebDecode(b);
+    return (0, leb128_1.slebDecode)(b);
   }
-
   get name() {
     return 'int';
   }
-
-  public valueToString(x: bigint) {
+  valueToString(x) {
     return x.toString();
   }
 }
-
+exports.IntClass = IntClass;
 /**
  * Represents an IDL Nat
  */
-export class NatClass extends PrimitiveType<bigint> {
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+class NatClass extends PrimitiveType {
+  accept(v, d) {
     return v.visitNat(this, d);
   }
-
-  public covariant(x: any): x is bigint {
+  covariant(x) {
     // We allow encoding of JavaScript plain numbers.
     // But we will always decode to bigint.
     if ((typeof x === 'bigint' && x >= BigInt(0)) || (Number.isInteger(x) && x >= 0)) return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: bigint | number) {
-    return lebEncode(x);
+  encodeValue(x) {
+    return (0, leb128_1.lebEncode)(x);
   }
-
-  public encodeType() {
-    return slebEncode(IDLTypeIds.Nat);
+  encodeType() {
+    return (0, leb128_1.slebEncode)(-3 /* IDLTypeIds.Nat */);
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     this.checkType(t);
-    return lebDecode(b);
+    return (0, leb128_1.lebDecode)(b);
   }
-
   get name() {
     return 'nat';
   }
-
-  public valueToString(x: bigint) {
+  valueToString(x) {
     return x.toString();
   }
 }
-
+exports.NatClass = NatClass;
 /**
  * Represents an IDL Float
  */
-export class FloatClass extends PrimitiveType<number> {
-  constructor(private _bits: number) {
+class FloatClass extends PrimitiveType {
+  constructor(_bits) {
     super();
+    this._bits = _bits;
     if (_bits !== 32 && _bits !== 64) {
       throw new Error('not a valid float type');
     }
   }
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     return v.visitFloat(this, d);
   }
-
-  public covariant(x: any): x is number {
+  covariant(x) {
     if (typeof x === 'number' || x instanceof Number) return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: number) {
+  encodeValue(x) {
     const buf = new ArrayBuffer(this._bits / 8);
     const view = new DataView(buf);
     if (this._bits === 32) {
@@ -599,15 +526,13 @@ export class FloatClass extends PrimitiveType<number> {
     }
     return buf;
   }
-
-  public encodeType() {
-    const opcode = this._bits === 32 ? IDLTypeIds.Float32 : IDLTypeIds.Float64;
-    return slebEncode(opcode);
+  encodeType() {
+    const opcode = this._bits === 32 ? -13 /* IDLTypeIds.Float32 */ : -14; /* IDLTypeIds.Float64 */
+    return (0, leb128_1.slebEncode)(opcode);
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     this.checkType(t);
-    const bytes = safeRead(b, this._bits / 8);
+    const bytes = (0, leb128_1.safeRead)(b, this._bits / 8);
     const view = new DataView(bytes);
     if (this._bits === 32) {
       return view.getFloat32(0, true);
@@ -615,31 +540,28 @@ export class FloatClass extends PrimitiveType<number> {
       return view.getFloat64(0, true);
     }
   }
-
   get name() {
     return 'float' + this._bits;
   }
-
-  public valueToString(x: number) {
+  valueToString(x) {
     return x.toString();
   }
 }
-
+exports.FloatClass = FloatClass;
 /**
  * Represents an IDL fixed-width Int(n)
  */
-export class FixedIntClass extends PrimitiveType<bigint | number> {
-  constructor(public readonly _bits: number) {
+class FixedIntClass extends PrimitiveType {
+  constructor(_bits) {
     super();
+    this._bits = _bits;
   }
-
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     return v.visitFixedInt(this, d);
   }
-
-  public covariant(x: any): x is bigint {
-    const min = iexp2(this._bits - 1) * BigInt(-1);
-    const max = iexp2(this._bits - 1) - BigInt(1);
+  covariant(x) {
+    const min = (0, bigint_math_1.iexp2)(this._bits - 1) * BigInt(-1);
+    const max = (0, bigint_math_1.iexp2)(this._bits - 1) - BigInt(1);
     let ok = false;
     if (typeof x === 'bigint') {
       ok = x >= min && x <= max;
@@ -649,53 +571,46 @@ export class FixedIntClass extends PrimitiveType<bigint | number> {
     } else {
       ok = false;
     }
-
     if (ok) return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: bigint | number) {
-    return writeIntLE(x, this._bits / 8);
+  encodeValue(x) {
+    return (0, leb128_1.writeIntLE)(x, this._bits / 8);
   }
-
-  public encodeType() {
+  encodeType() {
     const offset = Math.log2(this._bits) - 3;
-    return slebEncode(-9 - offset);
+    return (0, leb128_1.slebEncode)(-9 - offset);
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     this.checkType(t);
-    const num = readIntLE(b, this._bits / 8);
+    const num = (0, leb128_1.readIntLE)(b, this._bits / 8);
     if (this._bits <= 32) {
       return Number(num);
     } else {
       return num;
     }
   }
-
   get name() {
     return `int${this._bits}`;
   }
-
-  public valueToString(x: bigint | number) {
+  valueToString(x) {
     return x.toString();
   }
 }
-
+exports.FixedIntClass = FixedIntClass;
 /**
  * Represents an IDL fixed-width Nat(n)
  */
-export class FixedNatClass extends PrimitiveType<bigint | number> {
-  constructor(public readonly _bits: number) {
+class FixedNatClass extends PrimitiveType {
+  constructor(_bits) {
     super();
+    this._bits = _bits;
   }
-
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     return v.visitFixedNat(this, d);
   }
-
-  public covariant(x: any): x is bigint {
-    const max = iexp2(this._bits);
+  covariant(x) {
+    const max = (0, bigint_math_1.iexp2)(this._bits);
     let ok = false;
     if (typeof x === 'bigint' && x >= BigInt(0)) {
       ok = x < max;
@@ -708,35 +623,30 @@ export class FixedNatClass extends PrimitiveType<bigint | number> {
     if (ok) return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: bigint | number) {
-    return writeUIntLE(x, this._bits / 8);
+  encodeValue(x) {
+    return (0, leb128_1.writeUIntLE)(x, this._bits / 8);
   }
-
-  public encodeType() {
+  encodeType() {
     const offset = Math.log2(this._bits) - 3;
-    return slebEncode(-5 - offset);
+    return (0, leb128_1.slebEncode)(-5 - offset);
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     this.checkType(t);
-    const num = readUIntLE(b, this._bits / 8);
+    const num = (0, leb128_1.readUIntLE)(b, this._bits / 8);
     if (this._bits <= 32) {
       return Number(num);
     } else {
       return num;
     }
   }
-
   get name() {
     return `nat${this._bits}`;
   }
-
-  public valueToString(x: bigint | number) {
+  valueToString(x) {
     return x.toString();
   }
 }
-
+exports.FixedNatClass = FixedNatClass;
 /**
  * Represents an IDL Array
  *
@@ -745,27 +655,25 @@ export class FixedNatClass extends PrimitiveType<bigint | number> {
  *
  * @param {Type} t
  */
-export class VecClass<T> extends ConstructType<T[]> {
-  // If true, this vector is really a blob and we can just use memcpy.
-  //
-  // NOTE:
-  // With support of encoding/dencoding of TypedArrays, this optimization is
-  // only used when plain array of bytes are passed as encoding input in order
-  // to be backward compatible.
-  private _blobOptimization = false;
-
-  constructor(protected _type: Type<T>) {
+class VecClass extends ConstructType {
+  constructor(_type) {
     super();
+    this._type = _type;
+    // If true, this vector is really a blob and we can just use memcpy.
+    //
+    // NOTE:
+    // With support of encoding/dencoding of TypedArrays, this optimization is
+    // only used when plain array of bytes are passed as encoding input in order
+    // to be backward compatible.
+    this._blobOptimization = false;
     if (_type instanceof FixedNatClass && _type._bits === 8) {
       this._blobOptimization = true;
     }
   }
-
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     return v.visitVec(this, this._type, d);
   }
-
-  public covariant(x: any): x is T[] {
+  covariant(x) {
     // Special case for ArrayBuffer
     const bits =
       this._type instanceof FixedNatClass
@@ -773,32 +681,29 @@ export class VecClass<T> extends ConstructType<T[]> {
         : this._type instanceof FixedIntClass
         ? this._type._bits
         : 0;
-
     if (
-      (ArrayBuffer.isView(x) && bits == (x as any).BYTES_PER_ELEMENT * 8) ||
+      (ArrayBuffer.isView(x) && bits == x.BYTES_PER_ELEMENT * 8) ||
       (Array.isArray(x) &&
         x.every((v, idx) => {
           try {
             return this._type.covariant(v);
-          } catch (e: any) {
+          } catch (e) {
             throw new Error(`Invalid ${this.display()} argument: \n\nindex ${idx} -> ${e.message}`);
           }
         }))
     )
       return true;
-
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: T[]) {
-    const len = lebEncode(x.length);
+  encodeValue(x) {
+    const len = (0, leb128_1.lebEncode)(x.length);
     if (this._blobOptimization) {
-      return concat(len, new Uint8Array(x as unknown as number[]));
+      return (0, buffer_1.concat)(len, new Uint8Array(x));
     }
     if (ArrayBuffer.isView(x)) {
-      return concat(len, new Uint8Array(x.buffer));
+      return (0, buffer_1.concat)(len, new Uint8Array(x.buffer));
     }
-    const buf = new Pipe(new ArrayBuffer(len.byteLength + x.length), 0);
+    const buf = new buffer_1.PipeArrayBuffer(new ArrayBuffer(len.byteLength + x.length), 0);
     buf.write(len);
     for (const d of x) {
       const encoded = this._type.encodeValue(d);
@@ -806,120 +711,106 @@ export class VecClass<T> extends ConstructType<T[]> {
     }
     return buf.buffer;
   }
-
-  public _buildTypeTableImpl(typeTable: TypeTable) {
+  _buildTypeTableImpl(typeTable) {
     this._type.buildTypeTable(typeTable);
-
-    const opCode = slebEncode(IDLTypeIds.Vector);
+    const opCode = (0, leb128_1.slebEncode)(-19 /* IDLTypeIds.Vector */);
     const buffer = this._type.encodeType(typeTable);
-    typeTable.add(this, concat(opCode, buffer));
+    typeTable.add(this, (0, buffer_1.concat)(opCode, buffer));
   }
-
-  public decodeValue(b: Pipe, t: Type): T[] {
+  decodeValue(b, t) {
     const vec = this.checkType(t);
     if (!(vec instanceof VecClass)) {
       throw new Error('Not a vector type');
     }
-    const len = Number(lebDecode(b));
-
+    const len = Number((0, leb128_1.lebDecode)(b));
     if (this._type instanceof FixedNatClass) {
       if (this._type._bits == 8) {
-        return new Uint8Array(b.read(len)) as unknown as T[];
+        return new Uint8Array(b.read(len));
       }
       if (this._type._bits == 16) {
-        return new Uint16Array(b.read(len * 2)) as unknown as T[];
+        return new Uint16Array(b.read(len * 2));
       }
       if (this._type._bits == 32) {
-        return new Uint32Array(b.read(len * 4)) as unknown as T[];
+        return new Uint32Array(b.read(len * 4));
       }
       if (this._type._bits == 64) {
-        return new BigUint64Array(b.read(len * 8)) as unknown as T[];
+        return new BigUint64Array(b.read(len * 8));
       }
     }
-
     if (this._type instanceof FixedIntClass) {
       if (this._type._bits == 8) {
-        return new Int8Array(b.read(len)) as unknown as T[];
+        return new Int8Array(b.read(len));
       }
       if (this._type._bits == 16) {
-        return new Int16Array(b.read(len * 2)) as unknown as T[];
+        return new Int16Array(b.read(len * 2));
       }
       if (this._type._bits == 32) {
-        return new Int32Array(b.read(len * 4)) as unknown as T[];
+        return new Int32Array(b.read(len * 4));
       }
       if (this._type._bits == 64) {
-        return new BigInt64Array(b.read(len * 8)) as unknown as T[];
+        return new BigInt64Array(b.read(len * 8));
       }
     }
-
-    const rets: T[] = [];
+    const rets = [];
     for (let i = 0; i < len; i++) {
       rets.push(this._type.decodeValue(b, vec._type));
     }
     return rets;
   }
-
   get name() {
     return `vec ${this._type.name}`;
   }
-
-  public display() {
+  display() {
     return `vec ${this._type.display()}`;
   }
-
-  public valueToString(x: T[]) {
+  valueToString(x) {
     const elements = x.map(e => this._type.valueToString(e));
     return 'vec {' + elements.join('; ') + '}';
   }
 }
-
+exports.VecClass = VecClass;
 /**
  * Represents an IDL Option
  * @param {Type} t
  */
-export class OptClass<T> extends ConstructType<[T] | []> {
-  constructor(protected _type: Type<T>) {
+class OptClass extends ConstructType {
+  constructor(_type) {
     super();
+    this._type = _type;
   }
-
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     return v.visitOpt(this, this._type, d);
   }
-
-  public covariant(x: any): x is [T] | [] {
+  covariant(x) {
     try {
       if (Array.isArray(x) && (x.length === 0 || (x.length === 1 && this._type.covariant(x[0]))))
         return true;
-    } catch (e: any) {
+    } catch (e) {
       throw new Error(
         `Invalid ${this.display()} argument: ${toReadableString(x)} \n\n-> ${e.message}`,
       );
     }
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: [T] | []) {
+  encodeValue(x) {
     if (x.length === 0) {
       return new Uint8Array([0]);
     } else {
-      return concat(new Uint8Array([1]), this._type.encodeValue(x[0]));
+      return (0, buffer_1.concat)(new Uint8Array([1]), this._type.encodeValue(x[0]));
     }
   }
-
-  public _buildTypeTableImpl(typeTable: TypeTable) {
+  _buildTypeTableImpl(typeTable) {
     this._type.buildTypeTable(typeTable);
-
-    const opCode = slebEncode(IDLTypeIds.Opt);
+    const opCode = (0, leb128_1.slebEncode)(-18 /* IDLTypeIds.Opt */);
     const buffer = this._type.encodeType(typeTable);
-    typeTable.add(this, concat(opCode, buffer));
+    typeTable.add(this, (0, buffer_1.concat)(opCode, buffer));
   }
-
-  public decodeValue(b: Pipe, t: Type): [T] | [] {
+  decodeValue(b, t) {
     const opt = this.checkType(t);
     if (!(opt instanceof OptClass)) {
       throw new Error('Not an option type');
     }
-    switch (safeReadUint8(b)) {
+    switch ((0, leb128_1.safeReadUint8)(b)) {
       case 0:
         return [];
       case 1:
@@ -928,16 +819,13 @@ export class OptClass<T> extends ConstructType<[T] | []> {
         throw new Error('Not an option value');
     }
   }
-
   get name() {
     return `opt ${this._type.name}`;
   }
-
-  public display() {
+  display() {
     return `opt ${this._type.display()}`;
   }
-
-  public valueToString(x: [T] | []) {
+  valueToString(x) {
     if (x.length === 0) {
       return 'null';
     } else {
@@ -945,25 +833,23 @@ export class OptClass<T> extends ConstructType<[T] | []> {
     }
   }
 }
-
+exports.OptClass = OptClass;
 /**
  * Represents an IDL Record
  * @param {Object} [fields] - mapping of function name to Type
  */
-export class RecordClass extends ConstructType<Record<string, any>> {
-  protected readonly _fields: Array<[string, Type]>;
-
-  constructor(fields: Record<string, Type> = {}) {
+class RecordClass extends ConstructType {
+  constructor(fields = {}) {
     super();
-    this._fields = Object.entries(fields).sort((a, b) => idlLabelToId(a[0]) - idlLabelToId(b[0]));
+    this._fields = Object.entries(fields).sort(
+      (a, b) => (0, hash_1.idlLabelToId)(a[0]) - (0, hash_1.idlLabelToId)(b[0]),
+    );
   }
-
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     return v.visitRecord(this, this._fields, d);
   }
-
-  public tryAsTuple(): Type[] | null {
-    const res: Type[] = [];
+  tryAsTuple() {
+    const res = [];
     for (let i = 0; i < this._fields.length; i++) {
       const [key, type] = this._fields[i];
       if (key !== `_${i}_`) {
@@ -973,8 +859,7 @@ export class RecordClass extends ConstructType<Record<string, any>> {
     }
     return res;
   }
-
-  public covariant(x: any): x is Record<string, any> {
+  covariant(x) {
     if (
       typeof x === 'object' &&
       this._fields.every(([k, t]) => {
@@ -984,55 +869,50 @@ export class RecordClass extends ConstructType<Record<string, any>> {
         }
         try {
           return t.covariant(x[k]);
-        } catch (e: any) {
+        } catch (e) {
           throw new Error(`Invalid ${this.display()} argument: \n\nfield ${k} -> ${e.message}`);
         }
       })
     )
       return true;
-
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: Record<string, any>) {
+  encodeValue(x) {
     const values = this._fields.map(([key]) => x[key]);
     const bufs = zipWith(this._fields, values, ([, c], d) => c.encodeValue(d));
-    return concat(...bufs);
+    return (0, buffer_1.concat)(...bufs);
   }
-
-  public _buildTypeTableImpl(T: TypeTable) {
+  _buildTypeTableImpl(T) {
     this._fields.forEach(([_, value]) => value.buildTypeTable(T));
-    const opCode = slebEncode(IDLTypeIds.Record);
-    const len = lebEncode(this._fields.length);
+    const opCode = (0, leb128_1.slebEncode)(-20 /* IDLTypeIds.Record */);
+    const len = (0, leb128_1.lebEncode)(this._fields.length);
     const fields = this._fields.map(([key, value]) =>
-      concat(lebEncode(idlLabelToId(key)), value.encodeType(T)),
+      (0, buffer_1.concat)(
+        (0, leb128_1.lebEncode)((0, hash_1.idlLabelToId)(key)),
+        value.encodeType(T),
+      ),
     );
-
-    T.add(this, concat(opCode, len, concat(...fields)));
+    T.add(this, (0, buffer_1.concat)(opCode, len, (0, buffer_1.concat)(...fields)));
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     const record = this.checkType(t);
     if (!(record instanceof RecordClass)) {
       throw new Error('Not a record type');
     }
-    const x: Record<string, any> = {};
-
+    const x = {};
     let expectedRecordIdx = 0;
     let actualRecordIdx = 0;
     while (actualRecordIdx < record._fields.length) {
       const [hash, type] = record._fields[actualRecordIdx];
-
       if (expectedRecordIdx >= this._fields.length) {
         // skip unexpected left over fields present on the wire
         type.decodeValue(b, type);
         actualRecordIdx++;
         continue;
       }
-
       const [expectKey, expectType] = this._fields[expectedRecordIdx];
-      const expectedId = idlLabelToId(this._fields[expectedRecordIdx][0]);
-      const actualId = idlLabelToId(hash);
+      const expectedId = (0, hash_1.idlLabelToId)(this._fields[expectedRecordIdx][0]);
+      const actualId = (0, hash_1.idlLabelToId)(hash);
       if (expectedId === actualId) {
         // the current field on the wire matches the expected field
         x[expectKey] = expectType.decodeValue(b, type);
@@ -1052,7 +932,6 @@ export class RecordClass extends ConstructType<Record<string, any>> {
         actualRecordIdx++;
       }
     }
-
     // initialize left over expected optional fields
     for (const [expectKey, expectType] of this._fields.slice(expectedRecordIdx)) {
       if (expectType instanceof OptClass || expectType instanceof ReservedClass) {
@@ -1064,67 +943,56 @@ export class RecordClass extends ConstructType<Record<string, any>> {
     }
     return x;
   }
-
   get name() {
     const fields = this._fields.map(([key, value]) => key + ':' + value.name);
     return `record {${fields.join('; ')}}`;
   }
-
-  public display() {
+  display() {
     const fields = this._fields.map(([key, value]) => key + ':' + value.display());
     return `record {${fields.join('; ')}}`;
   }
-
-  public valueToString(x: Record<string, any>) {
+  valueToString(x) {
     const values = this._fields.map(([key]) => x[key]);
     const fields = zipWith(this._fields, values, ([k, c], d) => k + '=' + c.valueToString(d));
     return `record {${fields.join('; ')}}`;
   }
 }
-
+exports.RecordClass = RecordClass;
 /**
  * Represents Tuple, a syntactic sugar for Record.
  * @param {Type} components
  */
-export class TupleClass<T extends any[]> extends RecordClass {
-  protected readonly _components: Type[];
-
-  constructor(_components: Type[]) {
-    const x: Record<string, any> = {};
+class TupleClass extends RecordClass {
+  constructor(_components) {
+    const x = {};
     _components.forEach((e, i) => (x['_' + i + '_'] = e));
     super(x);
     this._components = _components;
   }
-
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     return v.visitTuple(this, this._components, d);
   }
-
-  public covariant(x: any): x is T {
+  covariant(x) {
     // `>=` because tuples can be covariant when encoded.
-
     if (
       Array.isArray(x) &&
       x.length >= this._fields.length &&
       this._components.every((t, i) => {
         try {
           return t.covariant(x[i]);
-        } catch (e: any) {
+        } catch (e) {
           throw new Error(`Invalid ${this.display()} argument: \n\nindex ${i} -> ${e.message}`);
         }
       })
     )
       return true;
-
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: any[]) {
+  encodeValue(x) {
     const bufs = zipWith(this._components, x, (c, d) => c.encodeValue(d));
-    return concat(...bufs);
+    return (0, buffer_1.concat)(...bufs);
   }
-
-  public decodeValue(b: Pipe, t: Type): T {
+  decodeValue(b, t) {
     const tuple = this.checkType(t);
     if (!(tuple instanceof TupleClass)) {
       throw new Error('not a tuple type');
@@ -1141,37 +1009,33 @@ export class TupleClass<T extends any[]> extends RecordClass {
         res.push(this._components[i].decodeValue(b, wireType));
       }
     }
-    return res as T;
+    return res;
   }
-
-  public display() {
+  display() {
     const fields = this._components.map(value => value.display());
     return `record {${fields.join('; ')}}`;
   }
-
-  public valueToString(values: any[]) {
+  valueToString(values) {
     const fields = zipWith(this._components, values, (c, d) => c.valueToString(d));
     return `record {${fields.join('; ')}}`;
   }
 }
-
+exports.TupleClass = TupleClass;
 /**
  * Represents an IDL Variant
  * @param {Object} [fields] - mapping of function name to Type
  */
-export class VariantClass extends ConstructType<Record<string, any>> {
-  private readonly _fields: Array<[string, Type]>;
-
-  constructor(fields: Record<string, Type> = {}) {
+class VariantClass extends ConstructType {
+  constructor(fields = {}) {
     super();
-    this._fields = Object.entries(fields).sort((a, b) => idlLabelToId(a[0]) - idlLabelToId(b[0]));
+    this._fields = Object.entries(fields).sort(
+      (a, b) => (0, hash_1.idlLabelToId)(a[0]) - (0, hash_1.idlLabelToId)(b[0]),
+    );
   }
-
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     return v.visitVariant(this, this._fields, d);
   }
-
-  public covariant(x: any): x is Record<string, any> {
+  covariant(x) {
     if (
       typeof x === 'object' &&
       Object.entries(x).length === 1 &&
@@ -1179,74 +1043,69 @@ export class VariantClass extends ConstructType<Record<string, any>> {
         try {
           // eslint-disable-next-line
           return !x.hasOwnProperty(k) || v.covariant(x[k]);
-        } catch (e: any) {
+        } catch (e) {
           throw new Error(`Invalid ${this.display()} argument: \n\nvariant ${k} -> ${e.message}`);
         }
       })
     )
       return true;
-
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: Record<string, any>) {
+  encodeValue(x) {
     for (let i = 0; i < this._fields.length; i++) {
       const [name, type] = this._fields[i];
       // eslint-disable-next-line
       if (x.hasOwnProperty(name)) {
-        const idx = lebEncode(i);
+        const idx = (0, leb128_1.lebEncode)(i);
         const buf = type.encodeValue(x[name]);
-
-        return concat(idx, buf);
+        return (0, buffer_1.concat)(idx, buf);
       }
     }
     throw Error('Variant has no data: ' + x);
   }
-
-  public _buildTypeTableImpl(typeTable: TypeTable) {
+  _buildTypeTableImpl(typeTable) {
     this._fields.forEach(([, type]) => {
       type.buildTypeTable(typeTable);
     });
-    const opCode = slebEncode(IDLTypeIds.Variant);
-    const len = lebEncode(this._fields.length);
+    const opCode = (0, leb128_1.slebEncode)(-21 /* IDLTypeIds.Variant */);
+    const len = (0, leb128_1.lebEncode)(this._fields.length);
     const fields = this._fields.map(([key, value]) =>
-      concat(lebEncode(idlLabelToId(key)), value.encodeType(typeTable)),
+      (0, buffer_1.concat)(
+        (0, leb128_1.lebEncode)((0, hash_1.idlLabelToId)(key)),
+        value.encodeType(typeTable),
+      ),
     );
-    typeTable.add(this, concat(opCode, len, ...fields));
+    typeTable.add(this, (0, buffer_1.concat)(opCode, len, ...fields));
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     const variant = this.checkType(t);
     if (!(variant instanceof VariantClass)) {
       throw new Error('Not a variant type');
     }
-    const idx = Number(lebDecode(b));
+    const idx = Number((0, leb128_1.lebDecode)(b));
     if (idx >= variant._fields.length) {
       throw Error('Invalid variant index: ' + idx);
     }
     const [wireHash, wireType] = variant._fields[idx];
     for (const [key, expectType] of this._fields) {
-      if (idlLabelToId(wireHash) === idlLabelToId(key)) {
+      if ((0, hash_1.idlLabelToId)(wireHash) === (0, hash_1.idlLabelToId)(key)) {
         const value = expectType.decodeValue(b, wireType);
         return { [key]: value };
       }
     }
     throw new Error('Cannot find field hash ' + wireHash);
   }
-
   get name() {
     const fields = this._fields.map(([key, type]) => key + ':' + type.name);
     return `variant {${fields.join('; ')}}`;
   }
-
-  public display() {
+  display() {
     const fields = this._fields.map(
       ([key, type]) => key + (type.name === 'null' ? '' : `:${type.display()}`),
     );
     return `variant {${fields.join('; ')}}`;
   }
-
-  public valueToString(x: Record<string, any>) {
+  valueToString(x) {
     for (const [name, type] of this._fields) {
       // eslint-disable-next-line
       if (x.hasOwnProperty(name)) {
@@ -1261,44 +1120,40 @@ export class VariantClass extends ConstructType<Record<string, any>> {
     throw new Error('Variant has no data: ' + x);
   }
 }
-
+exports.VariantClass = VariantClass;
 /**
  * Represents a reference to an IDL type, used for defining recursive data
  * types.
  */
-export class RecClass<T = any> extends ConstructType<T> {
-  private static _counter = 0;
-  private _id = RecClass._counter++;
-  private _type: ConstructType<T> | undefined = undefined;
-
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+class RecClass extends ConstructType {
+  constructor() {
+    super(...arguments);
+    this._id = RecClass._counter++;
+    this._type = undefined;
+  }
+  accept(v, d) {
     if (!this._type) {
       throw Error('Recursive type uninitialized.');
     }
     return v.visitRec(this, this._type, d);
   }
-
-  public fill(t: ConstructType<T>) {
+  fill(t) {
     this._type = t;
   }
-
-  public getType() {
+  getType() {
     return this._type;
   }
-
-  public covariant(x: any): x is T {
+  covariant(x) {
     if (this._type ? this._type.covariant(x) : false) return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: T) {
+  encodeValue(x) {
     if (!this._type) {
       throw Error('Recursive type uninitialized.');
     }
     return this._type.encodeValue(x);
   }
-
-  public _buildTypeTableImpl(typeTable: TypeTable) {
+  _buildTypeTableImpl(typeTable) {
     if (!this._type) {
       throw Error('Recursive type uninitialized.');
     }
@@ -1306,165 +1161,144 @@ export class RecClass<T = any> extends ConstructType<T> {
     this._type.buildTypeTable(typeTable);
     typeTable.merge(this, this._type.name);
   }
-
-  public decodeValue(b: Pipe, t: Type) {
+  decodeValue(b, t) {
     if (!this._type) {
       throw Error('Recursive type uninitialized.');
     }
     return this._type.decodeValue(b, t);
   }
-
   get name() {
     return `rec_${this._id}`;
   }
-
-  public display() {
+  display() {
     if (!this._type) {
       throw Error('Recursive type uninitialized.');
     }
     return `μ${this.name}.${this._type.name}`;
   }
-
-  public valueToString(x: T) {
+  valueToString(x) {
     if (!this._type) {
       throw Error('Recursive type uninitialized.');
     }
     return this._type.valueToString(x);
   }
 }
-
-function decodePrincipalId(b: Pipe): PrincipalId {
-  const x = safeReadUint8(b);
+exports.RecClass = RecClass;
+RecClass._counter = 0;
+function decodePrincipalId(b) {
+  const x = (0, leb128_1.safeReadUint8)(b);
   if (x !== 1) {
     throw new Error('Cannot decode principal');
   }
-
-  const len = Number(lebDecode(b));
-  return PrincipalId.fromUint8Array(new Uint8Array(safeRead(b, len)));
+  const len = Number((0, leb128_1.lebDecode)(b));
+  return principal_1.Principal.fromUint8Array(new Uint8Array((0, leb128_1.safeRead)(b, len)));
 }
-
 /**
  * Represents an IDL principal reference
  */
-export class PrincipalClass extends PrimitiveType<PrincipalId> {
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+class PrincipalClass extends PrimitiveType {
+  accept(v, d) {
     return v.visitPrincipal(this, d);
   }
-
-  public covariant(x: any): x is PrincipalId {
+  covariant(x) {
     if (x && x._isPrincipal) return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: PrincipalId): ArrayBuffer {
+  encodeValue(x) {
     const buf = x.toUint8Array();
-    const len = lebEncode(buf.byteLength);
-    return concat(new Uint8Array([1]), len, buf);
+    const len = (0, leb128_1.lebEncode)(buf.byteLength);
+    return (0, buffer_1.concat)(new Uint8Array([1]), len, buf);
   }
-
-  public encodeType() {
-    return slebEncode(IDLTypeIds.Principal);
+  encodeType() {
+    return (0, leb128_1.slebEncode)(-24 /* IDLTypeIds.Principal */);
   }
-
-  public decodeValue(b: Pipe, t: Type): PrincipalId {
+  decodeValue(b, t) {
     this.checkType(t);
     return decodePrincipalId(b);
   }
-
   get name() {
     return 'principal';
   }
-  public valueToString(x: PrincipalId) {
+  valueToString(x) {
     return `${this.name} "${x.toText()}"`;
   }
 }
-
+exports.PrincipalClass = PrincipalClass;
 /**
  * Represents an IDL function reference.
  * @param argTypes Argument types.
  * @param retTypes Return types.
  * @param annotations Function annotations.
  */
-export class FuncClass extends ConstructType<[PrincipalId, string]> {
-  public static argsToString(types: Type[], v: any[]) {
+class FuncClass extends ConstructType {
+  constructor(argTypes, retTypes, annotations = []) {
+    super();
+    this.argTypes = argTypes;
+    this.retTypes = retTypes;
+    this.annotations = annotations;
+  }
+  static argsToString(types, v) {
     if (types.length !== v.length) {
       throw new Error('arity mismatch');
     }
     return '(' + types.map((t, i) => t.valueToString(v[i])).join(', ') + ')';
   }
-
-  constructor(public argTypes: Type[], public retTypes: Type[], public annotations: string[] = []) {
-    super();
-  }
-
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     return v.visitFunc(this, d);
   }
-  public covariant(x: any): x is [PrincipalId, string] {
+  covariant(x) {
     if (Array.isArray(x) && x.length === 2 && x[0] && x[0]._isPrincipal && typeof x[1] === 'string')
       return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue([principal, methodName]: [PrincipalId, string]) {
+  encodeValue([principal, methodName]) {
     const buf = principal.toUint8Array();
-    const len = lebEncode(buf.byteLength);
-    const canister = concat(new Uint8Array([1]), len, buf);
-
+    const len = (0, leb128_1.lebEncode)(buf.byteLength);
+    const canister = (0, buffer_1.concat)(new Uint8Array([1]), len, buf);
     const method = new TextEncoder().encode(methodName);
-    const methodLen = lebEncode(method.byteLength);
-    return concat(new Uint8Array([1]), canister, methodLen, method);
+    const methodLen = (0, leb128_1.lebEncode)(method.byteLength);
+    return (0, buffer_1.concat)(new Uint8Array([1]), canister, methodLen, method);
   }
-
-  public _buildTypeTableImpl(T: TypeTable) {
+  _buildTypeTableImpl(T) {
     this.argTypes.forEach(arg => arg.buildTypeTable(T));
     this.retTypes.forEach(arg => arg.buildTypeTable(T));
-
-    const opCode = slebEncode(IDLTypeIds.Func);
-    const argLen = lebEncode(this.argTypes.length);
-    const args = concat(...this.argTypes.map(arg => arg.encodeType(T)));
-    const retLen = lebEncode(this.retTypes.length);
-    const rets = concat(...this.retTypes.map(arg => arg.encodeType(T)));
-    const annLen = lebEncode(this.annotations.length);
-    const anns = concat(...this.annotations.map(a => this.encodeAnnotation(a)));
-
-    T.add(this, concat(opCode, argLen, args, retLen, rets, annLen, anns));
+    const opCode = (0, leb128_1.slebEncode)(-22 /* IDLTypeIds.Func */);
+    const argLen = (0, leb128_1.lebEncode)(this.argTypes.length);
+    const args = (0, buffer_1.concat)(...this.argTypes.map(arg => arg.encodeType(T)));
+    const retLen = (0, leb128_1.lebEncode)(this.retTypes.length);
+    const rets = (0, buffer_1.concat)(...this.retTypes.map(arg => arg.encodeType(T)));
+    const annLen = (0, leb128_1.lebEncode)(this.annotations.length);
+    const anns = (0, buffer_1.concat)(...this.annotations.map(a => this.encodeAnnotation(a)));
+    T.add(this, (0, buffer_1.concat)(opCode, argLen, args, retLen, rets, annLen, anns));
   }
-
-  public decodeValue(b: Pipe): [PrincipalId, string] {
-    const x = safeReadUint8(b);
+  decodeValue(b) {
+    const x = (0, leb128_1.safeReadUint8)(b);
     if (x !== 1) {
       throw new Error('Cannot decode function reference');
     }
     const canister = decodePrincipalId(b);
-
-    const mLen = Number(lebDecode(b));
-    const buf = safeRead(b, mLen);
+    const mLen = Number((0, leb128_1.lebDecode)(b));
+    const buf = (0, leb128_1.safeRead)(b, mLen);
     const decoder = new TextDecoder('utf8', { fatal: true });
     const method = decoder.decode(buf);
-
     return [canister, method];
   }
-
   get name() {
     const args = this.argTypes.map(arg => arg.name).join(', ');
     const rets = this.retTypes.map(arg => arg.name).join(', ');
     const annon = ' ' + this.annotations.join(' ');
     return `(${args}) -> (${rets})${annon}`;
   }
-
-  public valueToString([principal, str]: [PrincipalId, string]) {
+  valueToString([principal, str]) {
     return `func "${principal.toText()}".${str}`;
   }
-
-  public display(): string {
+  display() {
     const args = this.argTypes.map(arg => arg.display()).join(', ');
     const rets = this.retTypes.map(arg => arg.display()).join(', ');
     const annon = ' ' + this.annotations.join(' ');
     return `(${args}) → (${rets})${annon}`;
   }
-
-  private encodeAnnotation(ann: string): ArrayBuffer {
+  encodeAnnotation(ann) {
     if (ann === 'query') {
       return new Uint8Array([1]);
     } else if (ann === 'oneway') {
@@ -1476,150 +1310,133 @@ export class FuncClass extends ConstructType<[PrincipalId, string]> {
     }
   }
 }
-
-export class ServiceClass extends ConstructType<PrincipalId> {
-  public readonly _fields: Array<[string, FuncClass]>;
-  constructor(fields: Record<string, FuncClass>) {
+exports.FuncClass = FuncClass;
+class ServiceClass extends ConstructType {
+  constructor(fields) {
     super();
     this._fields = Object.entries(fields).sort((a, b) => {
       if (a[0] < b[0]) {
         return -1;
       }
-
       if (a[0] > b[0]) {
         return 1;
       }
-
       return 0;
     });
   }
-  public accept<D, R>(v: Visitor<D, R>, d: D): R {
+  accept(v, d) {
     return v.visitService(this, d);
   }
-  public covariant(x: any): x is PrincipalId {
+  covariant(x) {
     if (x && x._isPrincipal) return true;
     throw new Error(`Invalid ${this.display()} argument: ${toReadableString(x)}`);
   }
-
-  public encodeValue(x: PrincipalId) {
+  encodeValue(x) {
     const buf = x.toUint8Array();
-    const len = lebEncode(buf.length);
-    return concat(new Uint8Array([1]), len, buf);
+    const len = (0, leb128_1.lebEncode)(buf.length);
+    return (0, buffer_1.concat)(new Uint8Array([1]), len, buf);
   }
-
-  public _buildTypeTableImpl(T: TypeTable) {
+  _buildTypeTableImpl(T) {
     this._fields.forEach(([_, func]) => func.buildTypeTable(T));
-    const opCode = slebEncode(IDLTypeIds.Service);
-    const len = lebEncode(this._fields.length);
+    const opCode = (0, leb128_1.slebEncode)(-23 /* IDLTypeIds.Service */);
+    const len = (0, leb128_1.lebEncode)(this._fields.length);
     const meths = this._fields.map(([label, func]) => {
       const labelBuf = new TextEncoder().encode(label);
-      const labelLen = lebEncode(labelBuf.length);
-      return concat(labelLen, labelBuf, func.encodeType(T));
+      const labelLen = (0, leb128_1.lebEncode)(labelBuf.length);
+      return (0, buffer_1.concat)(labelLen, labelBuf, func.encodeType(T));
     });
-
-    T.add(this, concat(opCode, len, ...meths));
+    T.add(this, (0, buffer_1.concat)(opCode, len, ...meths));
   }
-
-  public decodeValue(b: Pipe): PrincipalId {
+  decodeValue(b) {
     return decodePrincipalId(b);
   }
   get name() {
     const fields = this._fields.map(([key, value]) => key + ':' + value.name);
     return `service {${fields.join('; ')}}`;
   }
-
-  public valueToString(x: PrincipalId) {
+  valueToString(x) {
     return `service "${x.toText()}"`;
   }
 }
-
+exports.ServiceClass = ServiceClass;
 /**
  *
  * @param x
  * @returns {string}
  */
-function toReadableString(x: unknown): string {
+function toReadableString(x) {
   const str = JSON.stringify(x, (_key, value) =>
     typeof value === 'bigint' ? `BigInt(${value})` : value,
   );
-
   return str && str.length > toReadableString_max
     ? str.substring(0, toReadableString_max - 3) + '...'
     : str;
 }
-
 /**
  * Encode a array of values
  * @param argTypes
  * @param args
  * @returns {Buffer} serialised value
  */
-export function encode(argTypes: Array<Type<any>>, args: any[]): ArrayBuffer {
+function encode(argTypes, args) {
   if (args.length < argTypes.length) {
     throw Error('Wrong number of message arguments');
   }
-
   const typeTable = new TypeTable();
   argTypes.forEach(t => t.buildTypeTable(typeTable));
-
   const magic = new TextEncoder().encode(magicNumber);
   const table = typeTable.encode();
-  const len = lebEncode(args.length);
-  const typs = concat(...argTypes.map(t => t.encodeType(typeTable)));
-  const vals = concat(
+  const len = (0, leb128_1.lebEncode)(args.length);
+  const typs = (0, buffer_1.concat)(...argTypes.map(t => t.encodeType(typeTable)));
+  const vals = (0, buffer_1.concat)(
     ...zipWith(argTypes, args, (t, x) => {
       try {
         t.covariant(x);
-      } catch (e: any) {
+      } catch (e) {
         const err = new Error(e.message + '\n\n');
         throw err;
       }
-
       return t.encodeValue(x);
     }),
   );
-
-  return concat(magic, table, len, typs, vals);
+  return (0, buffer_1.concat)(magic, table, len, typs, vals);
 }
-
+exports.encode = encode;
 /**
  * Decode a binary value
  * @param retTypes - Types expected in the buffer.
  * @param bytes - hex-encoded string, or buffer.
  * @returns Value deserialised to JS type
  */
-export function decode(retTypes: Type[], bytes: ArrayBuffer): JsonValue[] {
-  const b = new Pipe(bytes);
-
+function decode(retTypes, bytes) {
+  const b = new buffer_1.PipeArrayBuffer(bytes);
   if (bytes.byteLength < magicNumber.length) {
     throw new Error('Message length smaller than magic number');
   }
-  const magicBuffer = safeRead(b, magicNumber.length);
+  const magicBuffer = (0, leb128_1.safeRead)(b, magicNumber.length);
   const magic = new TextDecoder().decode(magicBuffer);
   if (magic !== magicNumber) {
     throw new Error('Wrong magic number: ' + JSON.stringify(magic));
   }
-
-  function readTypeTable(pipe: Pipe): [Array<[IDLTypeIds, any]>, number[]] {
-    const typeTable: Array<[IDLTypeIds, any]> = [];
-    const len = Number(lebDecode(pipe));
-
+  function readTypeTable(pipe) {
+    const typeTable = [];
+    const len = Number((0, leb128_1.lebDecode)(pipe));
     for (let i = 0; i < len; i++) {
-      const ty = Number(slebDecode(pipe));
+      const ty = Number((0, leb128_1.slebDecode)(pipe));
       switch (ty) {
-        case IDLTypeIds.Opt:
-        case IDLTypeIds.Vector: {
-          const t = Number(slebDecode(pipe));
+        case -18 /* IDLTypeIds.Opt */:
+        case -19 /* IDLTypeIds.Vector */: {
+          const t = Number((0, leb128_1.slebDecode)(pipe));
           typeTable.push([ty, t]);
           break;
         }
-        case IDLTypeIds.Record:
-        case IDLTypeIds.Variant: {
+        case -20 /* IDLTypeIds.Record */:
+        case -21 /* IDLTypeIds.Variant */: {
           const fields = [];
-          let objectLength = Number(lebDecode(pipe));
+          let objectLength = Number((0, leb128_1.lebDecode)(pipe));
           let prevHash;
           while (objectLength--) {
-            const hash = Number(lebDecode(pipe));
+            const hash = Number((0, leb128_1.lebDecode)(pipe));
             if (hash >= Math.pow(2, 32)) {
               throw new Error('field id out of 32-bit range');
             }
@@ -1627,27 +1444,27 @@ export function decode(retTypes: Type[], bytes: ArrayBuffer): JsonValue[] {
               throw new Error('field id collision or not sorted');
             }
             prevHash = hash;
-            const t = Number(slebDecode(pipe));
+            const t = Number((0, leb128_1.slebDecode)(pipe));
             fields.push([hash, t]);
           }
           typeTable.push([ty, fields]);
           break;
         }
-        case IDLTypeIds.Func: {
+        case -22 /* IDLTypeIds.Func */: {
           const args = [];
-          let argLength = Number(lebDecode(pipe));
+          let argLength = Number((0, leb128_1.lebDecode)(pipe));
           while (argLength--) {
-            args.push(Number(slebDecode(pipe)));
+            args.push(Number((0, leb128_1.slebDecode)(pipe)));
           }
           const returnValues = [];
-          let returnValuesLength = Number(lebDecode(pipe));
+          let returnValuesLength = Number((0, leb128_1.lebDecode)(pipe));
           while (returnValuesLength--) {
-            returnValues.push(Number(slebDecode(pipe)));
+            returnValues.push(Number((0, leb128_1.slebDecode)(pipe)));
           }
           const annotations = [];
-          let annotationLength = Number(lebDecode(pipe));
+          let annotationLength = Number((0, leb128_1.lebDecode)(pipe));
           while (annotationLength--) {
-            const annotation = Number(lebDecode(pipe));
+            const annotation = Number((0, leb128_1.lebDecode)(pipe));
             switch (annotation) {
               case 1: {
                 annotations.push('query');
@@ -1668,13 +1485,13 @@ export function decode(retTypes: Type[], bytes: ArrayBuffer): JsonValue[] {
           typeTable.push([ty, [args, returnValues, annotations]]);
           break;
         }
-        case IDLTypeIds.Service: {
-          let servLength = Number(lebDecode(pipe));
+        case -23 /* IDLTypeIds.Service */: {
+          let servLength = Number((0, leb128_1.lebDecode)(pipe));
           const methods = [];
           while (servLength--) {
-            const nameLength = Number(lebDecode(pipe));
-            const funcName = new TextDecoder().decode(safeRead(pipe, nameLength));
-            const funcType = slebDecode(pipe);
+            const nameLength = Number((0, leb128_1.lebDecode)(pipe));
+            const funcName = new TextDecoder().decode((0, leb128_1.safeRead)(pipe, nameLength));
+            const funcType = (0, leb128_1.slebDecode)(pipe);
             methods.push([funcName, funcType]);
           }
           typeTable.push([ty, methods]);
@@ -1684,11 +1501,10 @@ export function decode(retTypes: Type[], bytes: ArrayBuffer): JsonValue[] {
           throw new Error('Illegal op_code: ' + ty);
       }
     }
-
-    const rawList: number[] = [];
-    const length = Number(lebDecode(pipe));
+    const rawList = [];
+    const length = Number((0, leb128_1.lebDecode)(pipe));
     for (let i = 0; i < length; i++) {
-      rawList.push(Number(slebDecode(pipe)));
+      rawList.push(Number((0, leb128_1.slebDecode)(pipe)));
     }
     return [typeTable, rawList];
   }
@@ -1696,50 +1512,49 @@ export function decode(retTypes: Type[], bytes: ArrayBuffer): JsonValue[] {
   if (rawTypes.length < retTypes.length) {
     throw new Error('Wrong number of return values');
   }
-
-  const table: RecClass[] = rawTable.map(_ => Rec());
-  function getType(t: number): Type {
+  const table = rawTable.map(_ => Rec());
+  function getType(t) {
     if (t < -24) {
       throw new Error('future value not supported');
     }
     if (t < 0) {
       switch (t) {
         case -1:
-          return Null;
+          return exports.Null;
         case -2:
-          return Bool;
+          return exports.Bool;
         case -3:
-          return Nat;
+          return exports.Nat;
         case -4:
-          return Int;
+          return exports.Int;
         case -5:
-          return Nat8;
+          return exports.Nat8;
         case -6:
-          return Nat16;
+          return exports.Nat16;
         case -7:
-          return Nat32;
+          return exports.Nat32;
         case -8:
-          return Nat64;
+          return exports.Nat64;
         case -9:
-          return Int8;
+          return exports.Int8;
         case -10:
-          return Int16;
+          return exports.Int16;
         case -11:
-          return Int32;
+          return exports.Int32;
         case -12:
-          return Int64;
+          return exports.Int64;
         case -13:
-          return Float32;
+          return exports.Float32;
         case -14:
-          return Float64;
+          return exports.Float64;
         case -15:
-          return Text;
+          return exports.Text;
         case -16:
-          return Reserved;
+          return exports.Reserved;
         case -17:
-          return Empty;
+          return exports.Empty;
         case -24:
-          return Principal;
+          return exports.Principal;
         default:
           throw new Error('Illegal op_code: ' + t);
       }
@@ -1749,18 +1564,18 @@ export function decode(retTypes: Type[], bytes: ArrayBuffer): JsonValue[] {
     }
     return table[t];
   }
-  function buildType(entry: [IDLTypeIds, any]): Type {
+  function buildType(entry) {
     switch (entry[0]) {
-      case IDLTypeIds.Vector: {
+      case -19 /* IDLTypeIds.Vector */: {
         const ty = getType(entry[1]);
         return Vec(ty);
       }
-      case IDLTypeIds.Opt: {
+      case -18 /* IDLTypeIds.Opt */: {
         const ty = getType(entry[1]);
         return Opt(ty);
       }
-      case IDLTypeIds.Record: {
-        const fields: Record<string, Type> = {};
+      case -20 /* IDLTypeIds.Record */: {
+        const fields = {};
         for (const [hash, ty] of entry[1]) {
           const name = `_${hash}_`;
           fields[name] = getType(ty);
@@ -1773,28 +1588,27 @@ export function decode(retTypes: Type[], bytes: ArrayBuffer): JsonValue[] {
           return record;
         }
       }
-      case IDLTypeIds.Variant: {
-        const fields: Record<string, Type> = {};
+      case -21 /* IDLTypeIds.Variant */: {
+        const fields = {};
         for (const [hash, ty] of entry[1]) {
           const name = `_${hash}_`;
           fields[name] = getType(ty);
         }
         return Variant(fields);
       }
-      case IDLTypeIds.Func: {
+      case -22 /* IDLTypeIds.Func */: {
         const [args, returnValues, annotations] = entry[1];
         return Func(
-          args.map((t: number) => getType(t)),
-          returnValues.map((t: number) => getType(t)),
+          args.map(t => getType(t)),
+          returnValues.map(t => getType(t)),
           annotations,
         );
       }
-      case IDLTypeIds.Service: {
-        const rec: Record<string, FuncClass> = {};
-        const methods = entry[1] as [[string, number]];
+      case -23 /* IDLTypeIds.Service */: {
+        const rec = {};
+        const methods = entry[1];
         for (const [name, typeRef] of methods) {
-          let type: Type | undefined = getType(typeRef);
-
+          let type = getType(typeRef);
           if (type instanceof RecClass) {
             // unpack reference type
             type = type.getType();
@@ -1810,156 +1624,109 @@ export function decode(retTypes: Type[], bytes: ArrayBuffer): JsonValue[] {
         throw new Error('Illegal op_code: ' + entry[0]);
     }
   }
-
   rawTable.forEach((entry, i) => {
     // Process function type first, so that we can construct the correct service type
-    if (entry[0] === IDLTypeIds.Func) {
+    if (entry[0] === -22 /* IDLTypeIds.Func */) {
       const t = buildType(entry);
       table[i].fill(t);
     }
   });
   rawTable.forEach((entry, i) => {
-    if (entry[0] !== IDLTypeIds.Func) {
+    if (entry[0] !== -22 /* IDLTypeIds.Func */) {
       const t = buildType(entry);
       table[i].fill(t);
     }
   });
-
   const types = rawTypes.map(t => getType(t));
   const output = retTypes.map((t, i) => {
     return t.decodeValue(b, types[i]);
   });
-
   // skip unused values
   for (let ind = retTypes.length; ind < types.length; ind++) {
     types[ind].decodeValue(b, types[ind]);
   }
-
   if (b.byteLength > 0) {
     throw new Error('decode: Left-over bytes');
   }
-
   return output;
 }
-
-/**
- * An Interface Factory, normally provided by a Candid code generation.
- */
-export type InterfaceFactory = (idl: {
-  IDL: {
-    Empty: EmptyClass;
-    Reserved: ReservedClass;
-    Unknown: UnknownClass;
-    Bool: BoolClass;
-    Null: NullClass;
-    Text: TextClass;
-    Int: IntClass;
-    Nat: NatClass;
-
-    Float32: FloatClass;
-    Float64: FloatClass;
-
-    Int8: FixedIntClass;
-    Int16: FixedIntClass;
-    Int32: FixedIntClass;
-    Int64: FixedIntClass;
-
-    Nat8: FixedNatClass;
-    Nat16: FixedNatClass;
-    Nat32: FixedNatClass;
-    Nat64: FixedNatClass;
-
-    Principal: PrincipalClass;
-
-    Tuple: typeof Tuple;
-    Vec: typeof Vec;
-    Opt: typeof Opt;
-    Record: typeof Record;
-    Variant: typeof Variant;
-    Rec: typeof Rec;
-    Func: typeof Func;
-
-    Service(t: Record<string, FuncClass>): ServiceClass;
-  };
-}) => ServiceClass;
-
+exports.decode = decode;
 // Export Types instances.
-export const Empty = new EmptyClass();
-export const Reserved = new ReservedClass();
+exports.Empty = new EmptyClass();
+exports.Reserved = new ReservedClass();
 /**
  * Client-only type for deserializing unknown data. Not supported by Candid, and its use is discouraged.
  */
-export const Unknown = new UnknownClass();
-export const Bool = new BoolClass();
-export const Null = new NullClass();
-export const Text = new TextClass();
-export const Int = new IntClass();
-export const Nat = new NatClass();
-
-export const Float32 = new FloatClass(32);
-export const Float64 = new FloatClass(64);
-
-export const Int8 = new FixedIntClass(8);
-export const Int16 = new FixedIntClass(16);
-export const Int32 = new FixedIntClass(32);
-export const Int64 = new FixedIntClass(64);
-
-export const Nat8 = new FixedNatClass(8);
-export const Nat16 = new FixedNatClass(16);
-export const Nat32 = new FixedNatClass(32);
-export const Nat64 = new FixedNatClass(64);
-
-export const Principal = new PrincipalClass();
-
+exports.Unknown = new UnknownClass();
+exports.Bool = new BoolClass();
+exports.Null = new NullClass();
+exports.Text = new TextClass();
+exports.Int = new IntClass();
+exports.Nat = new NatClass();
+exports.Float32 = new FloatClass(32);
+exports.Float64 = new FloatClass(64);
+exports.Int8 = new FixedIntClass(8);
+exports.Int16 = new FixedIntClass(16);
+exports.Int32 = new FixedIntClass(32);
+exports.Int64 = new FixedIntClass(64);
+exports.Nat8 = new FixedNatClass(8);
+exports.Nat16 = new FixedNatClass(16);
+exports.Nat32 = new FixedNatClass(32);
+exports.Nat64 = new FixedNatClass(64);
+exports.Principal = new PrincipalClass();
 /**
  *
  * @param types array of any types
  * @returns TupleClass from those types
  */
-export function Tuple<T extends any[]>(...types: T): TupleClass<T> {
+function Tuple(...types) {
   return new TupleClass(types);
 }
+exports.Tuple = Tuple;
 /**
  *
  * @param t IDL Type
  * @returns VecClass from that type
  */
-export function Vec<T>(t: Type<T>): VecClass<T> {
+function Vec(t) {
   return new VecClass(t);
 }
+exports.Vec = Vec;
 /**
  *
  * @param t IDL Type
  * @returns OptClass of Type
  */
-export function Opt<T>(t: Type<T>): OptClass<T> {
+function Opt(t) {
   return new OptClass(t);
 }
+exports.Opt = Opt;
 /**
  *
  * @param t Record of string and IDL Type
  * @returns RecordClass of string and Type
  */
-export function Record(t: Record<string, Type>): RecordClass {
+function Record(t) {
   return new RecordClass(t);
 }
-
+exports.Record = Record;
 /**
  *
  * @param fields Record of string and IDL Type
  * @returns VariantClass
  */
-export function Variant(fields: Record<string, Type>): VariantClass {
+function Variant(fields) {
   return new VariantClass(fields);
 }
+exports.Variant = Variant;
 /**
  *
  * @returns new RecClass
  */
-export function Rec(): RecClass {
+function Rec() {
   return new RecClass();
 }
-
+exports.Rec = Rec;
 /**
  *
  * @param args array of IDL Types
@@ -1967,15 +1734,17 @@ export function Rec(): RecClass {
  * @param annotations array of strings, [] by default
  * @returns new FuncClass
  */
-export function Func(args: Type[], ret: Type[], annotations: string[] = []): FuncClass {
+function Func(args, ret, annotations = []) {
   return new FuncClass(args, ret, annotations);
 }
-
+exports.Func = Func;
 /**
  *
  * @param t Record of string and FuncClass
  * @returns ServiceClass
  */
-export function Service(t: Record<string, FuncClass>): ServiceClass {
+function Service(t) {
   return new ServiceClass(t);
 }
+exports.Service = Service;
+//# sourceMappingURL=idl.js.map
